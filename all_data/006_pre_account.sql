@@ -40,15 +40,15 @@ declare
     ac_type_id int;
     ag_ac_id int;
     billwisedetail bool;
-    duebasedon typ_due_based_on;
+    duebasedon text;
     ex_ac_id int;
 begin
     begin
     cur_task = format('getting account_type_id for account_type_name: %s',new.account_type_name);
-    select id into ac_type_id 
-    from account_type 
-    where name=new.account_type_name 
-    or default_name::text in (select unnest(base_types) from account_type where name=new.account_type_name) 
+    select id into ac_type_id
+    from account_type
+    where name=new.account_type_name
+    or default_name::text in (select unnest(base_types) from account_type where name=new.account_type_name)
     limit 1;
 
     cur_task = format('agent_account_name: %s',new.agent_account_name);
@@ -97,7 +97,7 @@ begin
 
     if new.contact_type in ('VENDOR','CUSTOMER','AGENT') then
       billwisedetail=true;
-      duebasedon='EFF_DATE'::typ_due_based_on;
+      duebasedon='EFF_DATE';
     end if;
 
     select id into ex_ac_id from account where trim(name)=trim(new.name);
@@ -108,14 +108,14 @@ begin
           cur_task = format('gstno true, insert account id: %s', new.id);
           INSERT INTO account(NAME, ACCOUNT_TYPE_ID, AGENT_ID, CONTACT_TYPE, GST_REG_TYPE, GST_LOCATION_ID, GST_NO, PAN_NO,
           BILL_WISE_DETAIL, DUE_BASED_ON, MOBILE, TELEPHONE, EMAIL, CONTACT_PERSON, ADDRESS, CITY, PINCODE, STATE_ID, COUNTRY_ID) VALUES
-          (trim(new.name), ac_type_id, ag_ac_id, new.contact_type::typ_contact_type, new.gst_reg_type::typ_gst_reg_type, new.gst_location_id, new.gst_no, new.pan_no,
+          (trim(new.name), ac_type_id, ag_ac_id, new.contact_type, new.gst_reg_type, new.gst_location_id, new.gst_no, new.pan_no,
           billwisedetail, duebasedon, new.mobile, new.telephone, new.email, new.contact_person, new.address, new.city, new.pincode, new.state_id, new.country_id);
           delete from temp_acc where id=new.id;
       else
           cur_task = format('gstno false, insert account id: %s', new.id);
           INSERT INTO account(NAME, ACCOUNT_TYPE_ID, AGENT_ID, CONTACT_TYPE, GST_REG_TYPE, GST_LOCATION_ID, PAN_NO,
           BILL_WISE_DETAIL, DUE_BASED_ON, MOBILE, TELEPHONE, EMAIL, CONTACT_PERSON, ADDRESS, CITY, PINCODE, STATE_ID, COUNTRY_ID) VALUES
-          (trim(new.name), ac_type_id, ag_ac_id, new.contact_type::typ_contact_type, new.gst_reg_type::typ_gst_reg_type, new.gst_location_id, new.pan_no,
+          (trim(new.name), ac_type_id, ag_ac_id, new.contact_type, new.gst_reg_type, new.gst_location_id, new.pan_no,
           billwisedetail, duebasedon, new.mobile, new.telephone, new.email, new.contact_person, new.address, new.city, new.pincode, new.state_id, new.country_id);
       end if;
     end if;

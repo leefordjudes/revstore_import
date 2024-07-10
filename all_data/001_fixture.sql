@@ -1,5 +1,5 @@
 INSERT INTO account(name, account_type_id, contact_type, alias_name, bill_wise_detail, due_based_on)
-VALUES ('MainBranchAccount', 20, N'ACCOUNT'::contact_type, 'MBAc', false, 'EFF_DATE'::due_based_on);
+VALUES ('MainBranchAccount', 20, N'ACCOUNT', 'MBAc', false, 'EFF_DATE');
 --##
 INSERT INTO gst_registration(reg_type, gst_no, state_id)
 VALUES ('REGULAR','33AAICR8359N1ZN','33');
