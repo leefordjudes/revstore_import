@@ -3,13 +3,15 @@ use std::{fs, result::Result, time::Instant};
 use sea_orm::ConnectionTrait;
 //cargo run -- postgresql://postgres:A948Plus850Tuty@65.2.128.208:9488/rsdemo
 //cargo run -- postgresql://postgres:1@localhost:5432/t1
+//cargo run -- postgresql://postgres:1@192.168.1.49:5432/vsdemo
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
     let db_url = args
         .get(1)
         .map(|x| x.to_string())
-        .unwrap_or("postgresql://postgres:1@localhost:5432/aplus".to_owned());
+        .unwrap_or("postgresql://postgres:1@192.168.1.49:5432/rsdemo".to_owned());
+    // .unwrap_or("postgresql://postgres:1@localhost:5432/aplus".to_owned());
     let db = sea_orm::Database::connect(db_url)
         .await
         .expect("Database connection failed");
