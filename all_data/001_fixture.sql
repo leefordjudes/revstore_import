@@ -4,8 +4,8 @@ VALUES ('MainBranchAccount', 20, N'ACCOUNT', 'MBAc', false, 'EFF_DATE');
 INSERT INTO gst_registration(reg_type, gst_no, state_id)
 VALUES ('REGULAR','33AAICR8359N1ZN','33');
 --##
-INSERT INTO branch(name, telephone, address, city,pincode,voucher_no_prefix,account_id, gst_registration_id, state_id, country_id)
-VALUES ('MainBranch','044-61234700', '118B, GNT Road, Padiyanallur, Redhills','Chennai','600052','MB',101,1,'33','INDIA');
+INSERT INTO branch(name, telephone, address, city, pincode, voucher_no_prefix, account_id, gst_registration_id, members, state_id, country_id)
+VALUES ('MainBranch','044-61234700', '118B, GNT Road, Padiyanallur, Redhills','Chennai','600052','MB',101,1,array[]::int[],'33','INDIA');
 --##
 INSERT INTO unit (name, uqc_id, symbol, precision)
 VALUES ('PCS', 'PCS', 'PCS', 0);

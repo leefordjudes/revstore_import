@@ -10,7 +10,7 @@ async fn main() -> Result<(), String> {
     let db_url = args
         .get(1)
         .map(|x| x.to_string())
-        .unwrap_or("postgresql://postgres:1@192.168.1.49:5432/rsdemo".to_owned());
+        .unwrap_or("postgresql://postgres:1@192.168.1.31:54332/rsdemo".to_owned());
     // .unwrap_or("postgresql://postgres:1@localhost:5432/aplus".to_owned());
     let db = sea_orm::Database::connect(db_url)
         .await
