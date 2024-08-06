@@ -93,11 +93,12 @@ begin
         new.gst_location_id='33';
       end if;
     end if;
-    if new.contact_type in ('VENDOR','AGENT') then
-      ac_type_id=19;
+    if new.contact_type in ('ACCOUNT') then
+      transaction_enabled=true;
     end if;
 
     if new.contact_type in ('VENDOR','AGENT') then
+      ac_type_id=19;
       transaction_enabled=true;
       billwisedetail=true;
       duebasedon='EFF_DATE';
