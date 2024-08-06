@@ -1,5 +1,5 @@
--- INSERT INTO account(name, account_type_id, contact_type, alias_name, bill_wise_detail, due_based_on)
--- VALUES ('MainBranchAccount', 20, N'ACCOUNT', 'MBAc', false, 'EFF_DATE'); --101
+INSERT INTO account(name, account_type_id, contact_type, alias_name, bill_wise_detail, due_based_on)
+VALUES ('MainBranchAccount', 20, N'ACCOUNT', 'MBAc', false, 'EFF_DATE'); --101
 --##
 insert into account(name, account_type_id, contact_type) 
 values ('CUSTOMER ADVANCES', 2, 'ACCOUNT'); --102
