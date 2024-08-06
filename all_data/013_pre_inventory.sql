@@ -145,7 +145,7 @@ begin
       if inv_id is not null then
         inv_items =  json_agg(json_build_object('branch_id',br_id, 'inventory_id',inv_id, 'warehouse_id',1, 'unit_id',1, 'unit_conv',1,
         'qty',1.0, 'nlc',1.0, 'cost',1.0, 'rate',1.0, 'landing_cost',1.0, 'mrp',new.mrp, 's_rate',new.s_rate,
-        'asset_amount',1.0, 'is_loose_qty', false, 'sno',1));
+        'asset_amount',1.0, 'is_retail_qty', false, 'sno',1));
         if (new.name is not null and char_length(new.name) > 0) then
           input_data = json_build_object('inventory_id',inv_id, 'branch_id',br_id, 'warehouse_id',1, 'inv_items',inv_items );
           _fn_res = (select * from set_inventory_opening(input_data::json));
