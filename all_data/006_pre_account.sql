@@ -30,6 +30,62 @@ CREATE TABLE IF NOT EXISTS TEMP_ACC_OPENING_DATA
     AMOUNT       FLOAT
 );
 --##
+create function check_gst_no(text default null)
+    returns boolean as
+$$
+declare
+    pattern          text  := '([0-9]{2}[a-zA-Z]{5}[0-9]{4}[a-zA-Z]{1}[1-9A-Za-z]{1}[Zz1-9A-Ja-j]{1}[0-9a-zA-Z]{1}|' ||
+                              '[0-9]{2}[a-zA-Z]{4}[a-zA-Z0-9]{1}[0-9]{4}[a-zA-Z]{1}[1-9A-Za-z]{1}[D]{1}[0-9a-zA-Z]{1}|' ||
+                              '[0-9]{4}[A-Z]{3}[0-9]{5}[UO]{1}[N][A-Z0-9]{1}|' ||
+                              '[0-9]{4}[a-zA-Z]{3}[0-9]{5}[N][R][0-9a-zA-Z]{1}|' ||
+                              '[0-9]{2}[a-zA-Z]{5}[0-9]{4}[a-zA-Z]{1}[1-9A-Za-z]{1}[Z]{1}[0-9a-zA-Z]{1}|' ||
+                              '^[0-9]{4}[A][R][0-9]{7}[Z]{1}[0-9]{1}|' ||
+                              '^[0-9]{2}[a-zA-Z]{4}[0-9]{5}[a-zA-Z]{1}[0-9]{1}[Z]{1}[0-9]{1}|' ||
+                              '^[0-9]{4}[a-zA-Z]{3}[0-9]{5}[0-9]{1}[Z]{1}[0-9]{1}|' ||
+                              '^[9][9][0-9]{2}[a-zA-Z]{3}[0-9]{5}[O][S][0-9a-zA-Z]{1}$|' ||
+                              '^[0-9]{2}[a-zA-Z]{5}[0-9]{4}[a-zA-Z]{1}[1-9A-Za-z]{1}[C]{1}[0-9a-zA-Z]{1}$|' ||
+                              '^[0-9]{2}[a-zA-Z]{4}[a-zA-Z0-9]{1}[0-9]{4}[a-zA-Z]{1}[1-9A-Za-z]{1}[DK]{1}[0-9a-zA-Z]{1}$)';
+    cp_chars         text  := '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    sub_str          text  := substring(upper($1), 1, 14);
+    factor           float := 2;
+    sm               int   := 0;
+    code_point       float;
+    digit            float;
+    check_code_point int;
+begin
+    if $1 = '29AABCT1332L000' then
+        return true;
+    end if;
+    if $1 is not null then
+        if $1 similar to pattern then
+            for i in reverse 14..1
+                loop
+                    code_point = -1;
+                    for j in 1..36
+                        loop
+                            if substring(cp_chars, j, 1) = substring(sub_str, i, 1) then
+                                code_point = j - 1;
+                            end if;
+                        end loop;
+                    digit = factor * code_point;
+                    factor = case when factor = 2 then 1 else 2 end;
+                    digit = (digit / 36) + (digit::numeric % 36.0::numeric);
+                    sm = sm + floor(digit);
+                end loop;
+            check_code_point = (36 - (sm % 36)) % 36;
+            if upper($1) = concat(sub_str, substring(cp_chars, check_code_point + 1, 1)) then
+                return true;
+            else
+                return false;
+            end if;
+        else
+            return false;
+        end if;
+    end if;
+    return true;
+end;
+$$ language plpgsql;
+--##
 create or replace function fn_account_from_temp_acc()
 returns trigger
 language plpgsql
@@ -117,9 +173,9 @@ begin
 --           delete from temp_acc where id=new.id;
       else
           cur_task = format('gstno false, insert account id: %s', new.id);
-          INSERT INTO account(NAME, ACCOUNT_TYPE_ID, AGENT_ID, CONTACT_TYPE, GST_REG_TYPE, GST_LOCATION_ID, PAN_NO,
+          INSERT INTO account(NAME, ACCOUNT_TYPE_ID, ACCOUNT_TYPE_NAME, AGENT_ID, CONTACT_TYPE, GST_REG_TYPE, GST_LOCATION_ID, PAN_NO,
           BILL_WISE_DETAIL, transaction_enabled, DUE_BASED_ON, MOBILE, TELEPHONE, EMAIL, CONTACT_PERSON, ADDRESS, CITY, PINCODE, STATE_ID, COUNTRY_ID) VALUES
-          (trim(new.name), ac_type_id, ag_ac_id, new.contact_type, new.gst_reg_type, new.gst_location_id, new.pan_no,
+          (trim(new.name), ac_type_id, new.account_type_name, ag_ac_id, new.contact_type, new.gst_reg_type, new.gst_location_id, new.pan_no,
           billwisedetail, transaction_enabled, duebasedon, new.mobile, new.telephone, new.email, new.contact_person, new.address, new.city, new.pincode, new.state_id, new.country_id);
       end if;
     end if;
@@ -135,48 +191,48 @@ after insert on temp_acc
 for each row
 execute procedure fn_account_from_temp_acc();
 --##
-create or replace function get_acc_opening_data()
-    returns setof json
-as
-$$
-begin
-    return query
-        with s1 as (select acname,
-                           amount,
-                           json_build_object(
-                                   'ref_type', 'NEW',
-                                   'ref_no', refno,
-                                   'eff_date', refdate,
-                                   'amount', amount
-                           ) as bill_allocations
-                    from temp_acc_opening_data),
-             s2 as (select acname,
-                           sum(s1.amount)               as amt,
-                           json_agg(s1.bill_allocations) as bill_allocations
-                    from s1
-                    group by s1.acname),
-             s3 as (select --*
-                        json_build_object('accountName',x.account_name, 'baseTypes',x.base_types, 'accountId', x.account_id, 'branchId', 1, 'billAllocations', x.bill_allocations,
-                                             'debit', x.debit, 'credit', x.credit
-                           ) as data
-                    from (select a.id as account_id,
-                                 a.name as account_name,
-                                 a.base_account_types as base_types,
-                                 s2.bill_allocations,
-                                 round((case when s2.amt > 0 then s2.amt else 0 end))      as debit,
-                                 round((case when s2.amt < 0 then abs(s2.amt) else 0 end)) as credit
-                          from s2 left join account as a on trim(s2.acname) = trim(a.name)
-                          WHERE (a.base_account_types && array ['SUNDRY_DEBTOR','SUNDRY_CREDITOR'])
-                          ) x
-                    where x.account_id is NOT null
-                      and not (x.credit = 0 and x.debit = 0)
-                    )
-        select
-                data
---             account_id, account_name, base_types
-        from s3;
---         WHERE not (s3.base_types && array ['SUNDRY_DEBTOR','SUNDRY_CREDITOR']);
+-- create or replace function get_acc_opening_data()
+--     returns setof json
+-- as
+-- $$
+-- begin
+--     return query
+--         with s1 as (select acname,
+--                            amount,
+--                            json_build_object(
+--                                    'ref_type', 'NEW',
+--                                    'ref_no', refno,
+--                                    'eff_date', refdate,
+--                                    'amount', amount
+--                            ) as bill_allocations
+--                     from temp_acc_opening_data),
+--              s2 as (select acname,
+--                            sum(s1.amount)               as amt,
+--                            json_agg(s1.bill_allocations) as bill_allocations
+--                     from s1
+--                     group by s1.acname),
+--              s3 as (select --*
+--                         json_build_object('accountName',x.account_name, 'baseTypes',x.base_types, 'accountId', x.account_id, 'branchId', 1, 'billAllocations', x.bill_allocations,
+--                                              'debit', x.debit, 'credit', x.credit
+--                            ) as data
+--                     from (select a.id as account_id,
+--                                  a.name as account_name,
+--                                  a.base_account_types as base_types,
+--                                  s2.bill_allocations,
+--                                  round((case when s2.amt > 0 then s2.amt else 0 end))      as debit,
+--                                  round((case when s2.amt < 0 then abs(s2.amt) else 0 end)) as credit
+--                           from s2 left join account as a on trim(s2.acname) = trim(a.name)
+--                           WHERE (a.base_account_types && array ['SUNDRY_DEBTOR','SUNDRY_CREDITOR'])
+--                           ) x
+--                     where x.account_id is NOT null
+--                       and not (x.credit = 0 and x.debit = 0)
+--                     )
+--         select
+--                 data
+-- --             account_id, account_name, base_types
+--         from s3;
+-- --         WHERE not (s3.base_types && array ['SUNDRY_DEBTOR','SUNDRY_CREDITOR']);
 
-end;
-$$ language plpgsql security definer;
+-- end;
+-- $$ language plpgsql security definer;
 --##

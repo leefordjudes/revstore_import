@@ -1,3 +1,22 @@
+create or replace function tgf_sync_category_option()
+    returns trigger as
+$$
+begin
+    select coalesce(x.category,x.name) into new.category_name from category as x where x.id = new.category_id;
+    new.created_by = 1;
+    new.updated_by = 1;
+    new.created_at = current_timestamp;
+    new.updated_at = current_timestamp;
+    return new;
+end;
+$$ language plpgsql security definer;
+--##
+create trigger tg_sync_category_option
+    before insert
+    on category_option
+    for each row
+execute procedure tgf_sync_category_option();
+--##
 INSERT INTO category_option(category_id, name, active) VALUES ('INV_CAT1', '(MURALI)', true),
 ('INV_CAT1', '.', true),
 ('INV_CAT1', '0', true),

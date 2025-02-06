@@ -29,8 +29,9 @@ language plpgsql
 as
 $$
 declare
-    inv_id int;
+    inv inventory;
     br_id int := 1;
+    br_name text := 'MainBranch';
     div_id int;
     cat1_id int;
     cat2_id int;
@@ -71,20 +72,21 @@ begin
           if char_length(new.barcode::text) >0 then
               bcodes=(select array_agg(distinct n order by n) from unnest(ARRAY[new.id::text, new.barcode::text]::text[]) as t(n));
           end if;
-          insert into inventory(name, division_id, gst_tax_id, unit_id, sale_unit_id, purchase_unit_id, allow_negative_stock, purchase_config,
-                  barcodes,  hsn_code, category1, category2, category3, category4)
+          insert into inventory(name, division_id, gst_tax, unit_id, sale_unit_id, purchase_unit_id, allow_negative_stock, purchase_config,
+                  barcodes,  hsn_code, category1, category2, category3, category4, created_by, updated_by, created_at, updated_at)
           values(new.name, div_id, gst_tax, unit_id, unit_id, unit_id, true, pur_conf, bcodes,
                 (case when (new.hsn_code ~ '^[0-9]*$') and (char_length(new.hsn_code) between 1 and 10) then trim(new.hsn_code) end),
                 (case when cat1_id is null then null else ARRAY[cat1_id]::int[] end),
                 (case when cat2_id is null then null else ARRAY[cat2_id]::int[] end),
                 (case when cat3_id is null then null else ARRAY[cat3_id]::int[] end),
-                (case when cat4_id is null then null else ARRAY[cat4_id]::int[] end))
-          returning id into inv_id;
+                (case when cat4_id is null then null else ARRAY[cat4_id]::int[] end),
+                1,1,current_timestamp,current_timestamp)
+          returning * into inv;
           delete from temp_inv where id=new.id;
       end if;
 
     exception when others then
-      raise exception 'insert into inventory(name, division_id, gst_tax_id, unit_id, sale_unit_id, purchase_unit_id, allow_negative_stock, purchase_config,
+      raise exception 'insert into inventory(name, division_id, gst_tax, unit_id, sale_unit_id, purchase_unit_id, allow_negative_stock, purchase_config,
                        barcodes, hsn_code, category1, category2, category3, category4)
                        values(%,%,%,%,%,%,%,%,%,%,%,%,%,%);',new.name, div_id, new.gst_tax, unit_id,unit_id,unit_id,true, pur_conf,bcodes,
                         (case when (new.hsn_code ~ '^[0-9]*$') and (char_length(new.hsn_code) between 1 and 10) then trim(new.hsn_code) end),
@@ -96,7 +98,7 @@ begin
 
     -- price config : inventory branch detail
     begin
-      if inv_id is not null then
+      if inv.id is not null then
         if new.price_config_disc1 is not null then
             disc1 = json_build_object('mode','P', 'amount', new.price_config_disc1);
         end if;
@@ -104,16 +106,16 @@ begin
             disc2 = json_build_object('mode','P', 'amount', new.price_config_disc2);
         end if;
         if new.pc_cost_mrp_markdown is not null then  --PC_COST_MRP_MARKDOWN
-            nlc_price_list = json_build_object('based_on','MRP', 'mode','P', 'amount',new.pc_cost_mrp_markdown, 'calc_type','MARK_DOWN', 'precision',4);
+            nlc_price_list = json_build_object('margin_type','MARK_DOWN_MRP', 'mode','P', 'amount',new.pc_cost_mrp_markdown, 'precision',4);
         end if;
         if new.pc_cost_mrp_discount is not null then  --PC_COST_MRP_DISCOUNT
-            nlc_price_list = json_build_object('based_on','MRP','mode','P', 'amount',new.pc_cost_mrp_discount, 'calc_type','DISCOUNT', 'precision',4);
+            nlc_price_list = json_build_object('margin_type','DISCOUNT_MRP','mode','P', 'amount',new.pc_cost_mrp_discount, 'precision',4);
         end if;
         if new.pc_srate_landcost_markup is not null then -- PC_SRATE_LANDCOST_MARKUP
-            s_rate_price_list = json_build_object('based_on','LANDING_COST','mode','P', 'amount',4, 'calc_type','MARK_UP','precision',4);
+            s_rate_price_list = json_build_object('margin_type','MARK_UP_LANDING_COST','mode','P', 'amount',new.pc_srate_landcost_markup, 'precision',4);
         end if;
         if new.pc_srate_mrp_discount is not null then -- PC_SRATE_MRP_DISCOUNT
-            s_rate_price_list = json_build_object('based_on','MRP','mode','P', 'amount',new.pc_srate_mrp_discount, 'calc_type','DISCOUNT','precision',4);
+            s_rate_price_list = json_build_object('margin_type','DISCOUNT_MRP','mode','P', 'amount',new.pc_srate_mrp_discount, 'precision',4);
         end if;
         if new.tax_incl then
             pc_prate = (case when new.prate>0.0 then new.prate end);
@@ -121,38 +123,24 @@ begin
             pc_prate = (case when new.costrate>0.0 then new.costrate end);
         end if;
 
-        INSERT INTO inventory_branch_detail(inventory_id, branch_id, discount_1, discount_2,
-        nlc_price_list, s_rate_price_list, mrp, s_rate, p_rate_tax_inc, p_rate ) values
-        (inv_id, br_id, disc1, disc2, nlc_price_list, s_rate_price_list,
+        INSERT INTO inventory_branch_detail(inventory_id,inventory_name, branch_id,branch_name, discount_1, discount_2,
+        nlc_price_list, s_rate_price_list, mrp, s_rate, p_rate_tax_inc, p_rate,reorder_inventory_id, 
+        created_by, updated_by, created_at, updated_at ) values
+        (inv.id,inv.name, br_id,br_name, disc1, disc2, nlc_price_list, s_rate_price_list,
          case when new.mrp>0.0 then new.mrp end,
          case when new.s_rate>0.0 then new.s_rate end,
          case when new.tax_incl=1 then true else false end,
-         pc_prate);
+         pc_prate, inv.id, 1,1,current_timestamp,current_timestamp);
       end if;
 
     exception when others then
       raise exception 'INSERT INTO inventory_branch_detail(inventory_id, branch_id, discount_1, discount_2,
         nlc_price_list, s_rate_price_list, mrp, s_rate, p_rate_tax_inc, p_rate ) values
-        (%,%,%,%,%,%,%,%,%,%);',inv_id, br_id, disc1, disc2, nlc_price_list, s_rate_price_list,
+        (%,%,%,%,%,%,%,%,%,%);',inv.id, br_id, disc1, disc2, nlc_price_list, s_rate_price_list,
          case when new.mrp>0.0 then new.mrp end,
          case when new.s_rate>0.0 then new.s_rate end,
          case when new.tax_incl=1 then true else false end,
          pc_prate;
-    end;
-
-    -- inventory opening
-    begin
-      if inv_id is not null then
-        inv_items =  json_agg(json_build_object('branch_id',br_id, 'inventory_id',inv_id, 'warehouse_id',1, 'unit_id',1, 'unit_conv',1,
-        'qty',1.0, 'nlc',1.0, 'cost',1.0, 'rate',1.0, 'landing_cost',1.0, 'mrp',new.mrp, 's_rate',new.s_rate,
-        'asset_amount',1.0, 'is_retail_qty', false, 'sno',1));
-        if (new.name is not null and char_length(new.name) > 0) then
-          input_data = json_build_object('inventory_id',inv_id, 'branch_id',br_id, 'warehouse_id',1, 'inv_items',inv_items );
-          _fn_res = (select * from set_inventory_opening(input_data::json));
-        end if;
-      end if;
-    exception when others then
-      raise exception 'select * from set_inventory_opening(%);',json_build_object('inventory_id',inv_id, 'branch_id',1, 'warehouse_id',1, 'inv_items',inv_items );
     end;
 
     return new;
